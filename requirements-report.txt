@@ -1,0 +1,6 @@
+# Optional report/document export; install after requirements.txt only when needed.
+markdown>=3.5
+python-docx>=1.1
+reportlab>=4.0
+lxml>=4.9
+weasyprint>=60

@@ -1,0 +1,38 @@
+schema_version: 1
+project:
+  id: synthetic_demo
+  name: Synthetic clean_number demonstration
+
+factors:
+  - name: treatment
+    label: Treatment
+    type: categorical
+
+mixes:
+  control:
+    description: Synthetic control condition
+  treated:
+    description: Synthetic treated condition
+
+condition_mapping:
+  control:
+    group_id: control
+    mix_id: control
+    factors:
+      treatment: control
+    label_cn: Synthetic control
+    label_en: Synthetic control
+  treated:
+    group_id: treated
+    mix_id: treated
+    factors:
+      treatment: treated
+    label_cn: Synthetic treated
+    label_en: Synthetic treated
+
+display:
+  x_axis_label: Strain (%) or displacement (mm)
+  y_axis_label: Stress (MPa)
+
+comparison:
+  auto_discover: true
