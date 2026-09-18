@@ -21,6 +21,7 @@ from filename_parser import scan_directory
 from group_processor import process_all_groups
 from process_single import process_single_file
 from profile_loader import ExperimentProfile
+from processing_manifest import build_processing_manifest, read_summary_rows
 
 
 class PublicPipelineTests(unittest.TestCase):
@@ -111,6 +112,18 @@ class PublicPipelineTests(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("unit", result["error_msg"])
 
+    def test_millisecond_time_unit_does_not_match_seconds(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "d28control1-1.xls"
+            self._write_fixture(
+                source,
+                ["时间 (ms)", "应力 (MPa)", "应变 (%)"],
+                [[0.0, 0.0, 0.0], [0.1, 10.0, 0.1], [0.2, 20.0, 0.2]],
+            )
+            result = process_single_file(str(source), plot=False, flexural_mode=False)
+        self.assertEqual(result["status"], "error")
+        self.assertIn("time unit", result["error_msg"])
+
     def test_duplicate_semantic_columns_fail_closed(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "d28control1.xls"
@@ -141,6 +154,35 @@ class PublicPipelineTests(unittest.TestCase):
                 {path for path in Path(temp_dir).rglob("*") if path.is_file()},
                 {output / "summary.csv"},
             )
+
+    def test_processing_manifest_records_hashes_and_partial_failures(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            data = root / "input"
+            output = root / "output"
+            data.mkdir()
+            output.mkdir()
+            source = data / "sample.xls"
+            source.write_bytes(b"synthetic")
+            (output / "summary.csv").write_text(
+                "filename,raw_sha256,status,method,method_config_hash,is_duplicate_content\n"
+                f"{source.name},{hashlib.sha256(source.read_bytes()).hexdigest()},ok,compression,abc,False\n"
+                "missing.xls,,error,compression,abc,False\n",
+                encoding="utf-8",
+            )
+            manifest = build_processing_manifest(
+                data_dir=data,
+                output_dir=output,
+                run_id="synthetic-partial",
+                force_threshold=0.25,
+                summary_rows=read_summary_rows(output / "summary.csv"),
+                tool_root=ROOT,
+            )
+        self.assertEqual(manifest["status"], "partial_failure")
+        self.assertEqual(manifest["input"]["successful_files"], 1)
+        self.assertEqual(manifest["input"]["failed_files"], 1)
+        self.assertEqual(manifest["input"]["files"][0]["status"], "ok")
+        self.assertEqual(manifest["input"]["files"][1]["status"], "error")
 
 
 if __name__ == "__main__":

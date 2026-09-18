@@ -43,6 +43,12 @@ Use `--no-plot` to omit figures. Report export is optional; install
 `requirements-report.txt` when needed. Visual document QA is not part of this
 candidate's acceptance claim.
 
+Each completed run also writes `processing_manifest.json` below the explicit
+output directory. It binds the logical input filenames and raw hashes to the
+effective configuration, per-file processing status, and output hashes. A
+failed input is kept in the manifest and makes the CLI exit non-zero; it is not
+silently hidden by a successful batch summary.
+
 ## Input and configuration
 
 The reader accepts ordinary Excel files when the corresponding engine is
@@ -72,9 +78,10 @@ silently removed.
 
 This directory is an independent local candidate, not a published release.
 The first implementation batch covers the public-boundary audit, isolated
-synthetic regression and bounded CLI path. Mining-research-kernel registration,
-private sample comparison, licensing, remote repository creation and release
-publication are separate gates and are not performed by these commands.
+synthetic regression and bounded CLI path. Mining-research-kernel registration
+is a separate read-only adapter step; private sample comparison, licensing,
+remote repository creation and release publication are separate gates and are
+not performed by these commands.
 
 The license is intentionally undecided in this candidate. Do not redistribute
 it until a license and provenance review have been completed.

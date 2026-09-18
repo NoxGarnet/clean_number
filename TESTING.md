@@ -25,9 +25,10 @@ python examples/generate_synthetic_data.py
 python -m unittest discover -s tests -v
 ```
 
-The tests cover manifest mapping, unknown-method fail-closed behavior,
-compression strength and modulus regression, configurable flexural geometry,
-missing-column and unit fail-closed cases, duplicate semantic column detection,
+The tests cover manifest mapping, processing-manifest generation,
+unknown-method fail-closed behavior, compression strength and modulus
+regression, configurable flexural geometry, missing-column and unit fail-closed
+cases, millisecond-vs-second unit handling, duplicate semantic column detection,
 input hash preservation, independent-specimen aggregation, and output
 containment.
 

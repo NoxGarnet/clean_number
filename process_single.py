@@ -20,6 +20,7 @@ import logging
 import copy
 import hashlib
 import json
+import re
 
 import numpy as np
 import pandas as pd
@@ -143,7 +144,13 @@ def _flexural_factors(config: dict) -> tuple[float, float]:
 
 def _has_any_token(text: str, tokens: tuple[str, ...]) -> bool:
     lower = text.lower()
-    return any(token in lower for token in tokens)
+    for token in tokens:
+        if token.isalpha() and len(token) <= 2:
+            if re.search(rf"(?<![a-z]){re.escape(token)}(?![a-z])", lower):
+                return True
+        elif token in lower:
+            return True
+    return False
 
 
 def _standard_column_name(column: object) -> str | None:

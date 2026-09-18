@@ -12,6 +12,7 @@ import argparse
 import logging
 import os
 import sys
+from pathlib import Path
 
 logging.basicConfig(
     level=logging.INFO,
@@ -99,6 +100,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     failed = summary[summary["status"].fillna("").astype(str).str.casefold().ne("ok")]
     if not failed.empty:
+        from processing_manifest import write_processing_manifest
+        write_processing_manifest(
+            data_dir=ctx.data_dir,
+            output_dir=paths.output_dir,
+            run_id=Path(output_path).name,
+            force_threshold=args.threshold,
+            summary_rows=summary.to_dict("records"),
+            tool_root=os.path.dirname(os.path.abspath(__file__)),
+        )
         raise SystemExit(
             f"{len(failed)} input file(s) failed processing; see {paths.output_dir / 'summary.csv'}."
         )
@@ -131,6 +141,16 @@ def main(argv: list[str] | None = None) -> int:
             groups_results=groups, comparison_matrix=comparison,
             exp_type=ctx.experiment_type, profile=profile,
         )
+
+    from processing_manifest import write_processing_manifest
+    write_processing_manifest(
+        data_dir=ctx.data_dir,
+        output_dir=paths.output_dir,
+        run_id=Path(output_path).name,
+        force_threshold=args.threshold,
+        summary_rows=summary.to_dict("records"),
+        tool_root=os.path.dirname(os.path.abspath(__file__)),
+    )
 
     log.info("Completed: %d input records; output=%s", len(summary), paths.output_dir)
     return 0
