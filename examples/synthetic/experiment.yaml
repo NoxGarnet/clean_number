@@ -34,5 +34,27 @@ display:
   x_axis_label: Strain (%) or displacement (mm)
   y_axis_label: Stress (MPa)
 
+methods:
+  compression:
+    formula: peak_stress_chord_modulus
+    required_columns:
+      - stress_MPa
+      - strain_pct
+    modulus:
+      lower_fraction: 0.10
+      upper_fraction: 0.40
+  flexural:
+    formula: three_point_bending_rectangular
+    required_columns:
+      - force_kN
+      - deform_mm
+    geometry:
+      span_mm: 100.0
+      width_mm: 40.0
+      depth_mm: 40.0
+    modulus:
+      lower_fraction: 0.10
+      upper_fraction: 0.40
+
 comparison:
   auto_discover: true

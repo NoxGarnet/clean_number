@@ -17,6 +17,9 @@ import os
 import sys
 import warnings
 import logging
+import copy
+import hashlib
+import json
 
 import numpy as np
 import pandas as pd
@@ -59,6 +62,129 @@ COLUMN_KEYWORDS = {
     "deform_mm":    (["变形"], ["扩展"], False),  # 含"变形"不含"扩展"
     "time_s":       (["时间"], []),
 }
+
+DEFAULT_METHOD_CONFIG = {
+    "compression": {
+        "formula": "peak_stress_chord_modulus",
+        "required_columns": ["stress_MPa", "strain_pct"],
+        "modulus": {
+            "lower_fraction": 0.10,
+            "upper_fraction": 0.40,
+        },
+    },
+    "flexural": {
+        "formula": "three_point_bending_rectangular",
+        "required_columns": ["force_kN", "deform_mm"],
+        "geometry": {
+            "span_mm": 100.0,
+            "width_mm": 40.0,
+            "depth_mm": 40.0,
+        },
+        "modulus": {
+            "lower_fraction": 0.10,
+            "upper_fraction": 0.40,
+        },
+    },
+}
+
+
+def _deep_merge(base: dict, override: dict | None) -> dict:
+    result = copy.deepcopy(base)
+    if not override:
+        return result
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = copy.deepcopy(value)
+    return result
+
+
+def _resolve_method_config(kind: str, method_config: dict | None = None) -> dict:
+    method_kind = str(kind).lower()
+    if method_kind not in DEFAULT_METHOD_CONFIG:
+        raise ValueError(f"Unsupported test method: {kind}")
+    config = _deep_merge(DEFAULT_METHOD_CONFIG[method_kind], method_config)
+    modulus = config.get("modulus", {}) or {}
+    lower = float(modulus.get("lower_fraction", 0.10))
+    upper = float(modulus.get("upper_fraction", 0.40))
+    if not (0 < lower < upper < 1):
+        raise ValueError("Modulus fractions must satisfy 0 < lower < upper < 1.")
+    if method_kind == "flexural":
+        formula = config.get("formula", "three_point_bending_rectangular")
+        if formula != "three_point_bending_rectangular":
+            raise ValueError(f"Unsupported flexural formula: {formula}")
+        geometry = config.get("geometry", {}) or {}
+        for key in ("span_mm", "width_mm", "depth_mm"):
+            if float(geometry.get(key, 0)) <= 0:
+                raise ValueError(f"Flexural geometry {key} must be greater than zero.")
+    return config
+
+
+def _method_config_hash(config: dict) -> str:
+    payload = json.dumps(config, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _modulus_fractions(config: dict) -> tuple[float, float]:
+    modulus = config.get("modulus", {}) or {}
+    return float(modulus.get("lower_fraction", 0.10)), float(modulus.get("upper_fraction", 0.40))
+
+
+def _flexural_factors(config: dict) -> tuple[float, float]:
+    geometry = config.get("geometry", {}) or {}
+    span = float(geometry["span_mm"])
+    width = float(geometry["width_mm"])
+    depth = float(geometry["depth_mm"])
+    stress_coefficient = 3.0 * 1000.0 * span / (2.0 * width * depth ** 2)
+    modulus_factor = span ** 3 / (4.0 * width * depth ** 3)
+    return stress_coefficient, modulus_factor
+
+
+def _has_any_token(text: str, tokens: tuple[str, ...]) -> bool:
+    lower = text.lower()
+    return any(token in lower for token in tokens)
+
+
+def _standard_column_name(column: object) -> str | None:
+    col = str(column).strip()
+    col_lower = col.lower()
+
+    if "应力" in col:
+        if not _has_any_token(col_lower, ("mpa", "兆帕")):
+            raise ValueError(f"Unsupported or missing stress unit in column: {col}")
+        return "stress_MPa"
+
+    if "应变" in col:
+        if not _has_any_token(col_lower, ("%", "pct", "百分")):
+            raise ValueError(f"Unsupported or missing strain unit in column: {col}")
+        return "strain_pct"
+
+    if "变形" in col and "扩展" not in col:
+        if not _has_any_token(col_lower, ("mm", "毫米")):
+            raise ValueError(f"Unsupported or missing displacement unit in column: {col}")
+        return "deform_mm"
+
+    if "时间" in col:
+        if not _has_any_token(col_lower, ("s", "秒")):
+            raise ValueError(f"Unsupported or missing time unit in column: {col}")
+        return "time_s"
+
+    if "力" in col:
+        if not _has_any_token(col_lower, ("kn", "千牛")):
+            raise ValueError(f"Unsupported or missing force unit in column: {col}")
+        return "force_kN"
+
+    return None
+
+
+def _validate_required_columns(df: pd.DataFrame, method_kind: str, config: dict) -> None:
+    required = [str(column) for column in config.get("required_columns", [])]
+    missing = [column for column in required if column not in df.columns]
+    if missing:
+        raise ValueError(
+            f"{method_kind} input missing required columns: {', '.join(missing)}"
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -161,49 +287,22 @@ def fuzzy_rename_columns(df: pd.DataFrame) -> pd.DataFrame:
         列名已标准化的 DataFrame。
     """
     rename_map = {}
+    matched_sources: dict[str, object] = {}
     original_cols = list(df.columns)
 
     for col in original_cols:
         col_str = str(col).strip()
-        col_lower = col_str.lower()
-        matched = False
-
-        # force_kN：含"力"且含"k"
-        if "力" in col_str and "k" in col_lower:
-            rename_map[col] = "force_kN"
-            matched = True
-            log.debug("  → 列匹配: '%s' → force_kN", col_str)
-            continue
-
-        # stress_MPa：含"应力"
-        if "应力" in col_str:
-            rename_map[col] = "stress_MPa"
-            matched = True
-            log.debug("  → 列匹配: '%s' → stress_MPa", col_str)
-            continue
-
-        # strain_pct：含"应变"
-        if "应变" in col_str:
-            rename_map[col] = "strain_pct"
-            matched = True
-            log.debug("  → 列匹配: '%s' → strain_pct", col_str)
-            continue
-
-        # deform_mm：含"变形"且不含"扩展"
-        if "变形" in col_str and "扩展" not in col_str:
-            rename_map[col] = "deform_mm"
-            matched = True
-            log.debug("  → 列匹配: '%s' → deform_mm", col_str)
-            continue
-
-        # time_s：含"时间"
-        if "时间" in col_str:
-            rename_map[col] = "time_s"
-            matched = True
-            log.debug("  → 列匹配: '%s' → time_s", col_str)
-            continue
-
-        if not matched:
+        standard = _standard_column_name(col)
+        if standard:
+            if standard in matched_sources:
+                raise ValueError(
+                    "Multiple columns map to "
+                    f"{standard}: {matched_sources[standard]!r}, {col!r}"
+                )
+            rename_map[col] = standard
+            matched_sources[standard] = col
+            log.debug("  → 列匹配: '%s' → %s", col_str, standard)
+        else:
             log.debug("  → 列未匹配: '%s' (保留原始名称)", col_str)
 
     df = df.rename(columns=rename_map)
@@ -350,6 +449,8 @@ def align_data(df: pd.DataFrame, origin_idx: int) -> pd.DataFrame:
 # ══════════════════════════════════════════════════════════════════════
 def extract_properties(
     df_aligned: pd.DataFrame,
+    method_config: dict | None = None,
+    method_kind: str = "compression",
 ) -> dict:
     """
     提取抗压强度和弹性模量（两点弦线法 10%–40%）。
@@ -380,6 +481,8 @@ def extract_properties(
     """
     stress_col = "stress_MPa_aligned"
     strain_col = "strain_pct_aligned"
+    config = _resolve_method_config(method_kind, method_config)
+    lower_fraction, upper_fraction = _modulus_fractions(config)
 
     if stress_col not in df_aligned.columns:
         raise ValueError(f"对齐数据缺少 '{stress_col}' 列。")
@@ -389,6 +492,12 @@ def extract_properties(
         return {
             "strength_MPa": float(df_aligned[stress_col].max()),
             "modulus_GPa": None,
+            "stress_lower": None,
+            "strain_lower": None,
+            "stress_upper": None,
+            "strain_upper": None,
+            "modulus_lower_fraction": lower_fraction,
+            "modulus_upper_fraction": upper_fraction,
             "stress_10pct": None,
             "strain_10pct": None,
             "stress_40pct": None,
@@ -417,6 +526,12 @@ def extract_properties(
         return {
             "strength_MPa": strength_MPa,
             "modulus_GPa": None,
+            "stress_lower": None,
+            "strain_lower": None,
+            "stress_upper": None,
+            "strain_upper": None,
+            "modulus_lower_fraction": lower_fraction,
+            "modulus_upper_fraction": upper_fraction,
             "stress_10pct": None,
             "strain_10pct": None,
             "stress_40pct": None,
@@ -424,8 +539,8 @@ def extract_properties(
         }
 
     # 两点弦线法
-    stress_target_10 = 0.10 * strength_MPa
-    stress_target_40 = 0.40 * strength_MPa
+    stress_target_10 = lower_fraction * strength_MPa
+    stress_target_40 = upper_fraction * strength_MPa
 
     idx_10 = np.argmin(np.abs(ascending - stress_target_10))
     idx_40 = np.argmin(np.abs(ascending - stress_target_40))
@@ -467,6 +582,12 @@ def extract_properties(
     return {
         "strength_MPa": strength_MPa,
         "modulus_GPa": modulus_GPa,
+        "stress_lower": s1,
+        "strain_lower": e1_pct,
+        "stress_upper": s2,
+        "strain_upper": e2_pct,
+        "modulus_lower_fraction": lower_fraction,
+        "modulus_upper_fraction": upper_fraction,
         "stress_10pct": s1,
         "strain_10pct": e1_pct,
         "stress_40pct": s2,
@@ -517,14 +638,17 @@ def plot_stress_strain(
     fig, ax = plt.subplots(figsize=(6, 5))
 
     # ── 主曲线 ────────────────────────────────────────────────────
-    ax.plot(strain, stress, color="black", linewidth=1.0, label="Stress–Strain")
+    curve_label = "Stress–Displacement" if flexural_mode else "Stress–Strain"
+    ax.plot(strain, stress, color="black", linewidth=1.0, label=curve_label)
 
     # ── 模量拟合验证线（红色虚线） ──────────────────────────────
     modulus = props.get("modulus_GPa")
-    s1 = props.get("stress_10pct")
-    e1_pct = props.get("strain_10pct")
-    s2 = props.get("stress_40pct")
-    e2_pct = props.get("strain_40pct")
+    s1 = props.get("stress_lower")
+    e1_pct = props.get("strain_lower")
+    s2 = props.get("stress_upper")
+    e2_pct = props.get("strain_upper")
+    lower_label = props.get("modulus_lower_fraction", 0.10) * 100
+    upper_label = props.get("modulus_upper_fraction", 0.40) * 100
 
     if modulus is not None and s1 is not None and s2 is not None:
         # 在 10%–40% 区间绘制红色虚线
@@ -534,7 +658,7 @@ def plot_stress_strain(
             color="red",
             linewidth=1.5,
             linestyle="--",
-            label=f"Chord modulus (10%–40%) = {modulus:.2f} GPa",
+            label=f"Chord modulus ({lower_label:g}%–{upper_label:g}%) = {modulus:.2f} GPa",
         )
 
     # ── 峰值标记 ──────────────────────────────────────────────────
@@ -570,7 +694,7 @@ def plot_stress_strain(
     )
 
     # ── 轴标签 ────────────────────────────────────────────────────
-    ax.set_xlabel("Strain (%)")
+    ax.set_xlabel("Displacement (mm)" if flexural_mode else "Strain (%)")
     ax.set_ylabel("Stress (MPa)")
 
     # ── 标题（已移除：文件名含中文导致乱码，编号已在文件名中体现） ──
@@ -602,7 +726,7 @@ def plot_stress_strain(
 # ══════════════════════════════════════════════════════════════════════
 #  7. 抗折修正系数
 # ══════════════════════════════════════════════════════════════════════
-# Fixed three-point-bending geometry used by the current implementation:
+# Default three-point-bending geometry used when no manifest override is supplied:
 # σ_f = 1.5 × F × L / b³
 # L=100mm(跨距), b=40mm(试件边长)
 # σ_f(MPa) = 2.34375 × F(kN)
@@ -618,24 +742,29 @@ def _detect_flexural(filepath: str) -> bool:
     return "抗折" in path_lower or "bending" in path_lower or "flexural" in path_lower
 
 
-def _recalculate_flexural(df_aligned: pd.DataFrame) -> pd.DataFrame:
+def _recalculate_flexural(
+    df_aligned: pd.DataFrame,
+    method_config: dict | None = None,
+) -> pd.DataFrame:
     """
     抗折数据修正：弃用仪器错误应力列，用真实公式重算。
 
-    The current supported flexural fixture uses the fixed geometry constants
-    above. The caller must not treat this as general standards compliance.
+    The supported flexural path uses rectangular three-point-bending geometry
+    from the method config. The caller must not treat this as general standards
+    compliance.
     """
+    config = _resolve_method_config("flexural", method_config)
+    stress_coefficient, _ = _flexural_factors(config)
     if "force_kN" not in df_aligned.columns:
         log.warning("  ⚠ 抗折模式缺少 force_kN 列，无法重算")
         return df_aligned
 
     force = df_aligned["force_kN"].values.astype(float)
-    true_stress = force * FLEXURAL_COEFFICIENT
+    true_stress = force * stress_coefficient
 
     # 替换应力列
     df_aligned["stress_MPa"] = true_stress
-    if "stress_MPa_aligned" in df_aligned.columns:
-        df_aligned["stress_MPa_aligned"] = true_stress
+    df_aligned["stress_MPa_aligned"] = true_stress
 
     # 抗折用位移代替应变作为X轴
     if "deform_mm" in df_aligned.columns:
@@ -649,8 +778,15 @@ def _recalculate_flexural(df_aligned: pd.DataFrame) -> pd.DataFrame:
 # ══════════════════════════════════════════════════════════════════════
 #  8. 单文件主流程
 # ══════════════════════════════════════════════════════════════════════
-def _calculate_flexural_modulus(df_aligned, strength_MPa):
+def _calculate_flexural_modulus(
+    df_aligned,
+    strength_MPa,
+    method_config: dict | None = None,
+):
     """计算抗折弹性模量（三点弯曲法）。"""
+    config = _resolve_method_config("flexural", method_config)
+    lower_fraction, upper_fraction = _modulus_fractions(config)
+    _, modulus_factor = _flexural_factors(config)
     if "force_kN" not in df_aligned.columns or "deform_mm_aligned" not in df_aligned.columns:
         log.warning("  ⚠ 缺少 force_kN 或位移列，无法计算抗折模量")
         return None
@@ -664,8 +800,8 @@ def _calculate_flexural_modulus(df_aligned, strength_MPa):
     d_up = deform[:peak+1]
     if len(f_up) < 5:
         return None
-    t10 = 0.10 * peak_force
-    t40 = 0.40 * peak_force
+    t10 = lower_fraction * peak_force
+    t40 = upper_fraction * peak_force
     i10 = np.argmin(np.abs(f_up - t10))
     i40 = np.argmin(np.abs(f_up - t40))
     if i10 >= i40:
@@ -674,9 +810,9 @@ def _calculate_flexural_modulus(df_aligned, strength_MPa):
     dd = d_up[i40] - d_up[i10]
     if dd < 1e-6:
         return None
-    mod = FLEXURAL_MODULUS_FACTOR * dF / dd
-    log.info("  \u2192 抗折模量: %.3f GPa  (10%%=%.3f kN @ \u03b4=%.4fmm \u2192 40%%=%.3f kN @ \u03b4=%.4fmm)",
-             mod, f_up[i10], d_up[i10], f_up[i40], d_up[i40])
+    mod = modulus_factor * dF / dd
+    log.info("  \u2192 抗折模量: %.3f GPa  (%.0f%%=%.3f kN @ \u03b4=%.4fmm \u2192 %.0f%%=%.3f kN @ \u03b4=%.4fmm)",
+             mod, lower_fraction * 100, f_up[i10], d_up[i10], upper_fraction * 100, f_up[i40], d_up[i40])
     return float(mod)
 
 
@@ -688,6 +824,7 @@ def process_single_file(
     strain_threshold: float = 0.001,
     flexural_mode: bool = None,
     processing_override: dict = None,
+    method_config: dict | None = None,
 ) -> dict:
     """
     处理单个试验机数据文件。
@@ -730,9 +867,16 @@ def process_single_file(
     # 自动检测抗折
     if flexural_mode is None:
         flexural_mode = _detect_flexural(filepath)
+    method_kind = "flexural" if flexural_mode else "compression"
+    method_config = _resolve_method_config(method_kind, method_config)
 
     result = {
         "filename": fname,
+        "method": method_kind,
+        "method_config_hash": _method_config_hash(method_config),
+        "formula": method_config.get("formula", ""),
+        "modulus_lower_fraction": _modulus_fractions(method_config)[0],
+        "modulus_upper_fraction": _modulus_fractions(method_config)[1],
         "strength_MPa": None,
         "modulus_GPa": None,
         "data_points": 0,
@@ -744,6 +888,13 @@ def process_single_file(
         "status": "ok",
         "error_msg": None,
     }
+    if method_kind == "flexural":
+        geometry = method_config.get("geometry", {}) or {}
+        result.update({
+            "span_mm": float(geometry["span_mm"]),
+            "width_mm": float(geometry["width_mm"]),
+            "depth_mm": float(geometry["depth_mm"]),
+        })
 
     try:
         # 1. 读取
@@ -752,6 +903,7 @@ def process_single_file(
 
         # 2. 模糊列名重命名
         df = fuzzy_rename_columns(df)
+        _validate_required_columns(df, method_kind, method_config)
 
         # 2b. 项目级异常文件处理规则（只裁剪内存数据，不修改原始文件）
         from processing_overrides import get_file_override, apply_processing_override
@@ -800,7 +952,7 @@ def process_single_file(
         # 5. 抗折修正：重算应力和切换X轴
         if flexural_mode:
             machine_strength = float(df_aligned["stress_MPa"].max()) if "stress_MPa" in df_aligned.columns else 0
-            df_aligned = _recalculate_flexural(df_aligned)
+            df_aligned = _recalculate_flexural(df_aligned, method_config=method_config)
             true_strength = float(df_aligned["stress_MPa"].max()) if "stress_MPa" in df_aligned.columns else 0
             log.warning(
                 "  ⚠ 检测到抗折试验，已自动修正仪器错误算法\n"
@@ -810,12 +962,22 @@ def process_single_file(
             )
 
         # 6. 提取指标
-        props = extract_properties(df_aligned)
+        props = extract_properties(
+            df_aligned,
+            method_config=method_config,
+            method_kind=method_kind,
+        )
 
         result["strength_MPa"] = props["strength_MPa"]
         if flexural_mode and "deform_mm" in df_aligned.columns:
-            fm = _calculate_flexural_modulus(df_aligned, result["strength_MPa"])
+            fm = _calculate_flexural_modulus(
+                df_aligned,
+                result["strength_MPa"],
+                method_config=method_config,
+            )
             result["modulus_GPa"] = fm if fm is not None else props["modulus_GPa"]
+            if fm is not None:
+                props["modulus_GPa"] = fm
         else:
             result["modulus_GPa"] = props["modulus_GPa"]
         result["data_points"] = len(df_aligned)

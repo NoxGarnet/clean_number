@@ -32,6 +32,7 @@ class ExperimentProfile:
     processing: dict = field(default_factory=dict)
     display: dict = field(default_factory=dict)
     comparison: dict = field(default_factory=dict)
+    methods: dict = field(default_factory=dict)
     schema_version: int = 0
     mixes: dict = field(default_factory=dict)
     condition_mapping: dict = field(default_factory=dict)
@@ -80,6 +81,7 @@ class ExperimentProfile:
             processing=data.get("processing", {}) or {},
             display=data.get("display", {}) or {},
             comparison=data.get("comparison", {}) or {},
+            methods=data.get("methods", {}) or {},
             schema_version=int(data.get("schema_version", 0) or 0),
             mixes=data.get("mixes", {}) or {},
             condition_mapping=data.get("condition_mapping", {}) or {},
@@ -98,6 +100,8 @@ class ExperimentProfile:
             raise ValueError(f"mixes 必须是对象: {self.source_path}")
         if not isinstance(self.condition_mapping, dict):
             raise ValueError(f"condition_mapping 必须是对象: {self.source_path}")
+        if not isinstance(self.methods, dict):
+            raise ValueError(f"methods 必须是对象: {self.source_path}")
 
         factor_names = set(self.get_factor_names())
         for condition, mapping in self.condition_mapping.items():
@@ -119,6 +123,35 @@ class ExperimentProfile:
             if unknown:
                 names = ", ".join(sorted(unknown))
                 raise ValueError(f"条件 {condition} 含未定义因素: {names}")
+
+        supported_methods = {"compression", "flexural"}
+        for method_name, config in self.methods.items():
+            if method_name not in supported_methods:
+                raise ValueError(f"不支持的 methods 项: {method_name}")
+            if not isinstance(config, dict):
+                raise ValueError(f"methods.{method_name} 必须是对象")
+            required_columns = config.get("required_columns", [])
+            if required_columns and not isinstance(required_columns, list):
+                raise ValueError(f"methods.{method_name}.required_columns 必须是列表")
+            modulus = config.get("modulus", {}) or {}
+            if not isinstance(modulus, dict):
+                raise ValueError(f"methods.{method_name}.modulus 必须是对象")
+            lower = float(modulus.get("lower_fraction", 0.10))
+            upper = float(modulus.get("upper_fraction", 0.40))
+            if not (0 < lower < upper < 1):
+                raise ValueError(
+                    f"methods.{method_name}.modulus lower_fraction/upper_fraction 必须满足 0 < lower < upper < 1"
+                )
+            if method_name == "flexural":
+                formula = config.get("formula", "three_point_bending_rectangular")
+                if formula != "three_point_bending_rectangular":
+                    raise ValueError(f"methods.flexural.formula 不支持: {formula}")
+                geometry = config.get("geometry", {}) or {}
+                if not isinstance(geometry, dict):
+                    raise ValueError("methods.flexural.geometry 必须是对象")
+                for key in ("span_mm", "width_mm", "depth_mm"):
+                    if key in geometry and float(geometry[key]) <= 0:
+                        raise ValueError(f"methods.flexural.geometry.{key} 必须大于 0")
 
     def resolve(self, condition: str) -> dict:
         """Resolve a filename condition token to stable project metadata."""
@@ -185,6 +218,10 @@ class ExperimentProfile:
 
     def processing_params(self) -> dict:
         return self.processing
+
+    def method_config(self, kind: str) -> dict:
+        """Return a copy of the method-specific calculation configuration."""
+        return copy.deepcopy(self.methods.get(str(kind).lower(), {}))
 
     def comparison_axes(self) -> list:
         return self.comparison.get("axes", [])

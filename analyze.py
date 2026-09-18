@@ -97,6 +97,11 @@ def main(argv: list[str] | None = None) -> int:
         figures_dir=str(paths.figures), force_threshold=args.threshold,
         plot=not args.no_plot, exp_type=ctx.experiment_type, profile=profile,
     )
+    failed = summary[summary["status"].fillna("").astype(str).str.casefold().ne("ok")]
+    if not failed.empty:
+        raise SystemExit(
+            f"{len(failed)} input file(s) failed processing; see {paths.output_dir / 'summary.csv'}."
+        )
 
     from group_processor import process_all_groups
     groups = process_all_groups(

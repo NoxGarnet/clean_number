@@ -5,14 +5,14 @@ The current public candidate supports two explicitly selected methods:
 
 | Method | Required measurement columns | Result |
 | --- | --- | --- |
-| `compression` | force or stress, plus strain when modulus is required | peak stress and a 10%–40% chord modulus |
+| `compression` | stress and strain | peak stress and a configurable chord modulus |
 | `flexural` | force and displacement | peak flexural stress and an optional diagnostic modulus |
 
 The flexural calculation currently uses fixed three-point-bending geometry
-constants in `process_single.py`. This is an implementation scope, not a
-claim of general standards compliance. Other methods, units, geometries and
-instrument conventions are outside the supported matrix until separately
-validated.
+defaults that can be overridden in `experiment.yaml`. This is an
+implementation scope, not a claim of general standards compliance. Other
+methods, units, geometries and instrument conventions are outside the supported
+matrix until separately validated. See [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md).
 
 ## Run the synthetic example
 
@@ -56,6 +56,12 @@ Conditions must be registered in `condition_mapping`; unknown conditions fail
 instead of falling back to a guessed group. The filename parser handles the
 documented `d{age}{condition}{specimen}-{end}` compression form and the
 corresponding flexural forms.
+
+The manifest may also declare method settings under `methods`. The public
+candidate currently accepts only `compression` and `flexural`. Required
+measurement columns, chord-modulus fractions, and rectangular three-point
+bending geometry are explicit there. Missing required columns, unknown units,
+or duplicate semantic columns fail closed instead of being guessed.
 
 Raw files are never rewritten. Processing overrides, when needed, are
 explicit, file-specific and auditable in `processing_overrides.yaml` beside

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import copy
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +27,11 @@ class PublicPipelineTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.profile = ExperimentProfile.from_yaml(str(EXAMPLES / "experiment.yaml"))
+
+    def _write_fixture(self, path: Path, headers: list[str], rows: list[list[float]]) -> None:
+        lines = ["synthetic fixture", "\t".join(headers)]
+        lines.extend("\t".join(str(value) for value in row) for row in rows)
+        path.write_text("\n".join(lines) + "\n", encoding="gbk")
 
     def test_manifest_maps_synthetic_conditions(self):
         groups = scan_directory(str(EXAMPLES / "input" / "compression"), profile=self.profile)
@@ -46,9 +53,75 @@ class PublicPipelineTests(unittest.TestCase):
 
     def test_flexural_fixture_uses_explicit_flexural_path(self):
         source = EXAMPLES / "input" / "flexural" / "d28treated1.xls"
-        result = process_single_file(str(source), plot=False, flexural_mode=True)
+        result = process_single_file(
+            str(source),
+            plot=False,
+            flexural_mode=True,
+            method_config=self.profile.method_config("flexural"),
+        )
         self.assertEqual(result["status"], "ok")
         self.assertAlmostEqual(result["strength_MPa"], 168.75, places=6)
+
+    def test_manifest_flexural_geometry_changes_calculated_strength(self):
+        config = copy.deepcopy(yaml.safe_load((EXAMPLES / "experiment.yaml").read_text(encoding="utf-8")))
+        config["methods"]["flexural"]["geometry"]["span_mm"] = 80.0
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "experiment.yaml"
+            config_path.write_text(
+                yaml.safe_dump(config, allow_unicode=True, sort_keys=False),
+                encoding="utf-8",
+            )
+            profile = ExperimentProfile.from_yaml(str(config_path))
+            source = EXAMPLES / "input" / "flexural" / "d28treated1.xls"
+            result = process_single_file(
+                str(source),
+                plot=False,
+                flexural_mode=True,
+                method_config=profile.method_config("flexural"),
+            )
+        self.assertEqual(result["status"], "ok")
+        self.assertAlmostEqual(result["strength_MPa"], 135.0, places=6)
+
+    def test_missing_required_measurement_column_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "d28control1-1.xls"
+            self._write_fixture(
+                source,
+                ["时间 (s)", "力 (kN)", "应力 (MPa)"],
+                [[0.0, 0.0, 0.0], [0.1, 10.0, 10.0], [0.2, 20.0, 20.0]],
+            )
+            result = process_single_file(
+                str(source),
+                plot=False,
+                flexural_mode=False,
+                method_config=self.profile.method_config("compression"),
+            )
+        self.assertEqual(result["status"], "error")
+        self.assertIn("missing required columns", result["error_msg"])
+
+    def test_unknown_units_fail_closed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "d28control1-1.xls"
+            self._write_fixture(
+                source,
+                ["时间 (s)", "应力", "应变 (%)"],
+                [[0.0, 0.0, 0.0], [0.1, 10.0, 0.1], [0.2, 20.0, 0.2]],
+            )
+            result = process_single_file(str(source), plot=False, flexural_mode=False)
+        self.assertEqual(result["status"], "error")
+        self.assertIn("unit", result["error_msg"])
+
+    def test_duplicate_semantic_columns_fail_closed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "d28control1.xls"
+            self._write_fixture(
+                source,
+                ["时间 (s)", "力 (kN)", "加载力 (kN)", "变形 (mm)"],
+                [[0.0, 0.0, 0.0, 0.0], [0.1, 10.0, 10.0, 0.1], [0.2, 20.0, 20.0, 0.2]],
+            )
+            result = process_single_file(str(source), plot=False, flexural_mode=True)
+        self.assertEqual(result["status"], "error")
+        self.assertIn("Multiple columns map to force_kN", result["error_msg"])
 
     def test_bounded_batch_and_group_outputs_use_only_requested_output(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -26,8 +26,10 @@ python -m unittest discover -s tests -v
 ```
 
 The tests cover manifest mapping, unknown-method fail-closed behavior,
-compression strength and modulus regression, flexural recalculation, input
-hash preservation, independent-specimen aggregation, and output containment.
+compression strength and modulus regression, configurable flexural geometry,
+missing-column and unit fail-closed cases, duplicate semantic column detection,
+input hash preservation, independent-specimen aggregation, and output
+containment.
 
 The two bounded CLI smoke runs are:
 

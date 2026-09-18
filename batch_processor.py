@@ -167,6 +167,7 @@ def batch_process(
                 raise ValueError(
                     "Test type is unknown. Pass an explicit kind or provide a supported RTF marker."
                 )
+        method_config = profile.method_config(test_type) if profile is not None else None
 
         # 图片输出目录：若指定 figures_dir 则单独存放，否则用 output_dir
         plot_dir = figures_dir or output_dir
@@ -180,6 +181,7 @@ def batch_process(
             plot=plot,
             flexural_mode=(test_type == "flexural"),
             processing_override=file_override,
+            method_config=method_config,
         )
 
         duplicate = duplicate_metadata[filepath]
@@ -214,6 +216,14 @@ def batch_process(
             "specimen_id": info.specimen_id if info else None,
             "end_id": info.end_id if info else None,
             "test_type": test_type,
+            "method": res.get("method"),
+            "formula": res.get("formula"),
+            "method_config_hash": res.get("method_config_hash"),
+            "modulus_lower_fraction": res.get("modulus_lower_fraction"),
+            "modulus_upper_fraction": res.get("modulus_upper_fraction"),
+            "span_mm": res.get("span_mm"),
+            "width_mm": res.get("width_mm"),
+            "depth_mm": res.get("depth_mm"),
             "strength_MPa": res.get("strength_MPa"),
             "modulus_GPa": res.get("modulus_GPa"),
             "data_points": res.get("data_points", 0),

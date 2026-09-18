@@ -33,7 +33,11 @@ def _detect_flexural_from_path(filepath: str) -> bool:
     return "抗折" in path_lower or "bending" in path_lower or "flexural" in path_lower
 
 
-def load_aligned_curve(filepath: str, flexural: bool | None = None) -> dict | None:
+def load_aligned_curve(
+    filepath: str,
+    flexural: bool | None = None,
+    method_config: dict | None = None,
+) -> dict | None:
     """
     从处理结果中加载对齐后的曲线。
     抗压: X轴 = strain_pct (%)，Y轴 = stress_MPa
@@ -64,7 +68,7 @@ def load_aligned_curve(filepath: str, flexural: bool | None = None) -> dict | No
                 log.warning("  跳过(无变形列): %s", filepath)
                 return None
             df_aligned = align_data(df, origin_idx)
-            df_aligned = _recalculate_flexural(df_aligned)
+            df_aligned = _recalculate_flexural(df_aligned, method_config=method_config)
             x_vals = df_aligned["deform_mm_aligned"].values.astype(float)
         else:
             # 抗压: 用应变(%)检测原点
@@ -134,6 +138,9 @@ def process_group(group_infos: list, output_dir: str, n_grid: int = 500, exp_typ
         )
     else:
         flexural = _detect_flexural_from_path(group_infos[0].filepath)
+    method_config = None
+    if profile is not None:
+        method_config = profile.method_config("flexural" if flexural else "compression")
 
     # summary.csv 是逐文件账本；统计前先过滤显式排除项，再合并为独立试件。
     summary_path = os.path.join(output_dir, "summary.csv")
@@ -159,7 +166,7 @@ def process_group(group_infos: list, output_dir: str, n_grid: int = 500, exp_typ
     for info in group_infos:
         if info.filename not in eligible_filenames:
             continue
-        curve = load_aligned_curve(info.filepath, flexural=flexural)
+        curve = load_aligned_curve(info.filepath, flexural=flexural, method_config=method_config)
         if curve is not None and len(curve["x"]) > 5:
             curves.append((info, curve))
             all_x.extend(curve["x"].tolist())
