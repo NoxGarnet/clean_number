@@ -53,6 +53,9 @@ modulus_GPa = span_mm^3 / (4 * width_mm * depth_mm^3) * dF_kN / ddelta_mm
 ```
 
 These equations and the compression chord-modulus interval are implementation
-contracts for the synthetic public candidate. Formal method authority, standard
-version, specimen-shape applicability, and instrument-specific interpretation
-remain pending review before any release or real-material claim.
+contracts for the synthetic public candidate. The mechanics derivation, sources
+actually read, independent numerical checks and standards differences are
+recorded in [METHOD_VALIDATION.md](METHOD_VALIDATION.md). The default 10%-40%
+interval is a diagnostic convention. Specimen applicability, instrument-channel
+interpretation and standards-conforming experimental acceptance are not
+established by this software review.

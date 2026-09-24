@@ -5,8 +5,8 @@ private workspace projects.
 
 ## Environment
 
-Create an isolated environment outside the repository if dependencies are not
-already installed:
+Create an isolated environment in the ignored `.venv/` directory if dependencies
+are not already installed:
 
 ```powershell
 python -m venv .venv
@@ -21,8 +21,8 @@ interpreter, not a compatibility guarantee for all Python versions.
 ## Checks
 
 ```powershell
-python examples/generate_synthetic_data.py
-python -m unittest discover -s tests -v
+& .\.venv\Scripts\python.exe examples/generate_synthetic_data.py
+& .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
 The tests cover manifest mapping, processing-manifest generation,
@@ -30,15 +30,17 @@ unknown-method fail-closed behavior, compression strength and modulus
 regression, configurable flexural geometry, missing-column and unit fail-closed
 cases, millisecond-vs-second unit handling, duplicate semantic column detection,
 input hash preservation, independent-specimen aggregation, and output
-containment.
+containment. The 12-test suite also checks independently calculated flexural
+moduli for two spans and an early-peak curve whose unavailable modulus must
+stay missing in both the result and plot inputs.
 
 The two bounded CLI smoke runs are:
 
 ```powershell
-python analyze.py --dir examples/synthetic/input/compression `
+& .\.venv\Scripts\python.exe analyze.py --dir examples/synthetic/input/compression `
   --config examples/synthetic/experiment.yaml --kind compression `
   --output run-output/compression --phase2-only
-python analyze.py --dir examples/synthetic/input/flexural `
+& .\.venv\Scripts\python.exe analyze.py --dir examples/synthetic/input/flexural `
   --config examples/synthetic/experiment.yaml --kind flexural `
   --output run-output/flexural --phase2-only
 ```

@@ -326,13 +326,10 @@ def detect_origin(
     lookahead: int = 5,
 ) -> int:
     """
-    使用应变列检测曲线真实原点：找到应变首次 > 微小阈值且持续增长的点。
-
-    对于泡沫混凝土等多孔材料，压密阶段力已在增加但应变几乎为0。
-    用应变检测比用力检测更准确。
+    使用应变或位移列估计裁剪起点；该启发式不构成试验零点标定。
     
     原点定位策略：找到应变首次超过 threshold（默认0.001%）的那一行的前一行
-    （即应变从0变为正的前一刻），作为真正的零点。
+    （即应变从0变为正的前一刻），作为候选裁剪起点。
 
     Parameters
     ----------
@@ -408,7 +405,7 @@ def align_data(df: pd.DataFrame, origin_idx: int) -> pd.DataFrame:
     以原点为基准裁剪并平移归零。
     
     关键物理区别：
-    - 应变(strain_pct) → 归零（模量计算必需从0开始）
+    - 应变(strain_pct) → 平移归零；常量平移不改变两点应变差
     - 应力(stress_MPa) → 不归零（抗压强度取原始最大值，与机器一致）
     - 力(force_kN)    → 不归零
 
@@ -426,7 +423,7 @@ def align_data(df: pd.DataFrame, origin_idx: int) -> pd.DataFrame:
     """
     df_aligned = df.iloc[origin_idx:].copy().reset_index(drop=True)
 
-    # 应变归零（模量计算必需）
+    # 应变平移归零；两点弦线模量不依赖这个常量平移
     if "strain_pct" in df_aligned.columns:
         origin_strain = df_aligned["strain_pct"].iloc[0]
         df_aligned["strain_pct_aligned"] = df_aligned["strain_pct"] - origin_strain
@@ -460,7 +457,8 @@ def extract_properties(
     method_kind: str = "compression",
 ) -> dict:
     """
-    提取抗压强度和弹性模量（两点弦线法 10%–40%）。
+    提取峰值应力和诊断弦线模量（配置区间，默认 10%–40%）。
+    抗折路径仅共用端点提取；其模量另由力和位移计算。
 
     ⚠ 应变单位处理：原始 strain_pct 为百分比（%），
        计算模量前除以 100 转换为绝对应变。
@@ -566,25 +564,25 @@ def extract_properties(
     e2_abs = e2_pct / 100.0
 
     # 弹性模量（MPa → GPa）
-    if abs(e2_abs - e1_abs) < 1e-12:
+    if method_kind == "flexural":
+        # Plotting aliases hold displacement in mm, not percent strain.
+        # Calculate flexural modulus separately from force/displacement.
+        modulus_GPa = None
+    elif abs(e2_abs - e1_abs) < 1e-12:
         modulus_GPa = None
         log.warning("  ⚠ 应变差过小，模量返回 None")
     else:
         modulus_MPa = (s2 - s1) / (e2_abs - e1_abs)
         modulus_GPa = modulus_MPa / 1000.0
 
-    log.info(
-        "  → 抗压强度: %.3f MPa", strength_MPa
-    )
-    log.info(
-        "  → 弹性模量: %.3f GPa  (10%%=%.3f MPa @ ε=%.4f%% → "
-        "40%%=%.3f MPa @ ε=%.4f%%)",
-        modulus_GPa if modulus_GPa is not None else 0.0,
-        s1,
-        e1_pct,
-        s2,
-        e2_pct,
-    )
+    log.info("  → 峰值应力: %.3f MPa", strength_MPa)
+    if modulus_GPa is not None:
+        log.info(
+            "  → 诊断弦线模量: %.3f GPa  (%.0f%%=%.3f MPa @ ε=%.4f%% → "
+            "%.0f%%=%.3f MPa @ ε=%.4f%%)",
+            modulus_GPa, lower_fraction * 100, s1, e1_pct,
+            upper_fraction * 100, s2, e2_pct,
+        )
 
     return {
         "strength_MPa": strength_MPa,
@@ -613,7 +611,7 @@ def plot_stress_strain(
     flexural_mode: bool = False,
 ) -> None:
     """
-    绘制期刊级应力-应变/应力-位移曲线。
+    绘制应力-应变/应力-位移曲线及可用的诊断弦线。
 
     元素：
       - 黑色实线：原始曲线
@@ -754,7 +752,7 @@ def _recalculate_flexural(
     method_config: dict | None = None,
 ) -> pd.DataFrame:
     """
-    抗折数据修正：弃用仪器错误应力列，用真实公式重算。
+    抗折应力：按配置的三点弯曲几何从力通道重算。
 
     The supported flexural path uses rectangular three-point-bending geometry
     from the method config. The caller must not treat this as general standards
@@ -962,8 +960,8 @@ def process_single_file(
             df_aligned = _recalculate_flexural(df_aligned, method_config=method_config)
             true_strength = float(df_aligned["stress_MPa"].max()) if "stress_MPa" in df_aligned.columns else 0
             log.warning(
-                "  ⚠ 检测到抗折试验，已自动修正仪器错误算法\n"
-                "    仪器错误应力: %.3f MPa (F/A)\n"
+                "  → 已按配置的三点弯曲几何重算应力\n"
+                "    输入应力列峰值（若缺失显示 0）: %.3f MPa\n"
                 "    Python 重算: %.3f MPa (三点弯曲公式)",
                 machine_strength, true_strength
             )
@@ -982,9 +980,13 @@ def process_single_file(
                 result["strength_MPa"],
                 method_config=method_config,
             )
-            result["modulus_GPa"] = fm if fm is not None else props["modulus_GPa"]
-            if fm is not None:
-                props["modulus_GPa"] = fm
+            result["modulus_GPa"] = fm
+            props["modulus_GPa"] = fm
+            if fm is None:
+                log.warning(
+                    "  → Flexural modulus unavailable: insufficient pre-peak "
+                    "points, unordered interval, or displacement increment < 1e-6 mm."
+                )
         else:
             result["modulus_GPa"] = props["modulus_GPa"]
         result["data_points"] = len(df_aligned)

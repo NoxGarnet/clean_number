@@ -5,6 +5,7 @@ import copy
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import pandas as pd
@@ -62,6 +63,31 @@ class PublicPipelineTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "ok")
         self.assertAlmostEqual(result["strength_MPa"], 168.75, places=6)
+        # Generated slope is 120 kN/mm; the beam factor is 0.09765625.
+        self.assertAlmostEqual(result["modulus_GPa"], 11.71875, places=6)
+
+    def test_unavailable_flexural_modulus_stays_missing_in_result_and_plot(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "d28control1.xls"
+            # Five points through the peak permit generic chord extraction,
+            # but are insufficient for the flexural modulus calculation.
+            self._write_fixture(
+                source,
+                ["时间 (s)", "力 (kN)", "变形 (mm)"],
+                [[i * 0.1, force, i * 0.1]
+                 for i, force in enumerate([0, 1, 2, 3, 4, 3, 2])],
+            )
+            with patch("process_single.plot_stress_strain") as plot:
+                result = process_single_file(
+                    str(source), plot=True, output_dir=temp_dir,
+                    flexural_mode=True,
+                    method_config=self.profile.method_config("flexural"),
+                )
+            self.assertEqual(result["status"], "ok")
+            self.assertAlmostEqual(result["strength_MPa"], 9.375, places=6)
+            self.assertIsNone(result["modulus_GPa"])
+            plot.assert_called_once()
+            self.assertIsNone(plot.call_args.args[1]["modulus_GPa"])
 
     def test_manifest_flexural_geometry_changes_calculated_strength(self):
         config = copy.deepcopy(yaml.safe_load((EXAMPLES / "experiment.yaml").read_text(encoding="utf-8")))
@@ -82,6 +108,8 @@ class PublicPipelineTests(unittest.TestCase):
             )
         self.assertEqual(result["status"], "ok")
         self.assertAlmostEqual(result["strength_MPa"], 135.0, places=6)
+        # With an 80 mm span the beam factor is 0.05, giving 6 GPa.
+        self.assertAlmostEqual(result["modulus_GPa"], 6.0, places=6)
 
     def test_missing_required_measurement_column_fails_closed(self):
         with tempfile.TemporaryDirectory() as temp_dir:

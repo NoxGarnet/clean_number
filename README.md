@@ -5,14 +5,31 @@ The current public candidate supports two explicitly selected methods:
 
 | Method | Required measurement columns | Result |
 | --- | --- | --- |
-| `compression` | stress and strain | peak stress and a configurable chord modulus |
+| `compression` | stress and strain | peak supplied stress and a configurable diagnostic chord modulus |
 | `flexural` | force and displacement | peak flexural stress and an optional diagnostic modulus |
 
 The flexural calculation currently uses fixed three-point-bending geometry
 defaults that can be overridden in `experiment.yaml`. This is an
 implementation scope, not a claim of general standards compliance. Other
 methods, units, geometries and instrument conventions are outside the supported
-matrix until separately validated. See [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md).
+matrix until separately validated. See [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md)
+and [METHOD_VALIDATION.md](METHOD_VALIDATION.md) for the reviewed mechanics,
+measurement assumptions and differences from standardized laboratory methods.
+
+## Install the core pipeline
+
+The verified environment is Windows with Python 3.14.2. From the repository
+root, create a local environment and install the core requirements:
+
+```powershell
+python -m venv .venv
+& .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+The version lower bounds are dependency declarations, not a tested compatibility
+matrix. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) records the reviewed
+versions and dependency scope. Report export is optional and is outside the
+verified first-release workflow.
 
 ## Run the synthetic example
 
@@ -20,15 +37,14 @@ The example data are generated, non-experimental fixtures. From this
 directory:
 
 ```powershell
-python examples/generate_synthetic_data.py
-python -m unittest discover -s tests -v
-python analyze.py `
+& .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+& .\.venv\Scripts\python.exe analyze.py `
   --dir examples/synthetic/input/compression `
   --config examples/synthetic/experiment.yaml `
   --kind compression `
   --output run-output/compression `
   --phase2-only
-python analyze.py `
+& .\.venv\Scripts\python.exe analyze.py `
   --dir examples/synthetic/input/flexural `
   --config examples/synthetic/experiment.yaml `
   --kind flexural `
@@ -76,12 +92,20 @@ silently removed.
 
 ## Development status
 
-This directory is an independent local candidate, not a published release.
-The first implementation batch covers the public-boundary audit, isolated
-synthetic regression and bounded CLI path. Mining-research-kernel registration
-is a separate read-only adapter step; private sample comparison, licensing,
-remote repository creation and release publication are separate gates and are
-not performed by these commands.
+As reviewed on 2026-09-25, this is an independent local candidate with a bounded
+CLI, configurable compression/flexural calculations, synthetic regression tests
+and versioned processing manifests. A separate mining-research-kernel adapter
+has been implemented and historically tested for manifest inspection and
+registration; installing this tool does not require that kernel.
 
-The license is intentionally undecided in this candidate. Do not redistribute
-it until a license and provenance review have been completed.
+A bounded private comparison was completed separately. Its data, configuration,
+results and ledger are not public fixtures and do not establish method validity.
+The public examples remain synthetic-only.
+
+The method/source review and dependency inventory are available in
+[METHOD_VALIDATION.md](METHOD_VALIDATION.md), [PROVENANCE.md](PROVENANCE.md)
+and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). See
+[RELEASE_NOTES.md](RELEASE_NOTES.md) for the unpublished candidate changes.
+The project license and source-rights confirmation remain undecided. No remote
+publication or standards-compliance approval is implied by this candidate.
+Do not redistribute until the owner has resolved those publication gates.
