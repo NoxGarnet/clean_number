@@ -13,7 +13,7 @@ from typing import Iterable
 
 SCHEMA_VERSION = 1
 MANIFEST_NAME = "processing_manifest.json"
-TOOL_VERSION = "0.2.0-candidate"
+TOOL_VERSION = "0.2.0-rc.1"
 
 
 def _sha256(path: Path) -> str | None:

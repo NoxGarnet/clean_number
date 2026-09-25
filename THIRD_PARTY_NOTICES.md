@@ -2,7 +2,7 @@
 
 This file records the dependency and notice review for the current `clean_number` candidate. It is an evidence-based inventory for review and release preparation. It is not a complete SBOM, a legal opinion, or a declaration that project redistribution is compliant.
 
-The candidate project license is intentionally undecided. Nothing in this file selects a project license or grants rights to the candidate source.
+The project source uses the [MIT License](LICENSE), selected by the maintainer on 2026-09-25. Dependencies retain their own licenses; the project license does not replace their terms.
 
 ## Review method
 
@@ -52,7 +52,7 @@ The following official PyPI project pages were checked for the latest published 
 
 ## Required follow-up before publication
 
-- Obtain and record source-rights confirmation for the project code; see [PROVENANCE.md](PROVENANCE.md).
+- Preserve the project license and source attribution; see [PROVENANCE.md](PROVENANCE.md).
 - Preserve the license and notice files for every exact dependency artifact selected for release, including transitive and bundled components.
 - The source-only first-release boundary does not require installing or running the optional report stack. Optional report support has not passed runtime acceptance. If report export is enabled later, pin or identify the exact stack and preserve its notices.
 - `weasyprint` was removed from `requirements-report.txt` after repository-wide review found no code or subprocess use. It is excluded from the current dependency set.

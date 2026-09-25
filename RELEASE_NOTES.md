@@ -1,8 +1,9 @@
-# Unpublished candidate changes
+# v0.2.0-rc.1 — release notes
 
-This is a release-note draft, not an announcement or a published version.
-The processing-manifest tool version remains `0.2.0-candidate` until the owner
-selects a release version. No project license has been granted by this file.
+Release candidate prepared for `NoxGarnet/clean_number`. The processing-manifest
+tool version is `0.2.0-rc.1`; the source is licensed under [MIT](LICENSE).
+This file describes the candidate and does not establish that a remote tag or
+GitHub Release has been published.
 
 ## Included
 
@@ -36,5 +37,5 @@ not standards-conforming test reports or material-validity conclusions.
 Instrument interpretation, specimen applicability and experimental acceptance
 remain the user's laboratory responsibilities; see [METHOD_VALIDATION.md](METHOD_VALIDATION.md).
 Optional DOCX/PDF export is not included in the validated release workflow.
-Source-rights confirmation, project licensing and explicit publication
-authorization remain open before release.
+Publication status and external release actions are tracked separately from
+this source change.
