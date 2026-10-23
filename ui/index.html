@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="local-api-token" content="__API_TOKEN__">
+  <title>clean_number · 实验数据工作台</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h5l2 2h8A1.5 1.5 0 0 1 21 9.5v7A1.5 1.5 0 0 1 19.5 18h-15A1.5 1.5 0 0 1 3 16.5z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h4M10 13h5M10 16h5"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 6 9 6-9 6z"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4h12l2 2v14H5z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19 8a7 7 0 0 0-12-2L5 8M5 5v3h3M5 16a7 7 0 0 0 12 2l2-2M19 19v-3h-3"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M13 5h6v6M19 5l-8 8"/><path d="M18 13v5H5V6h5"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M5 19V5M5 19h15M9 15v-3M13 15V8M17 15v-6"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M5 7h14M5 17h14M9 4v6M15 14v6"/></symbol>
+  </svg>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">CN</div><div><strong>clean_number</strong><span>科研数据工作台</span></div></div>
+      <nav class="side-nav" aria-label="主导航">
+        <button class="nav-item active" data-scroll="workspace"><svg><use href="#i-grid"/></svg><span>实验工作台</span></button>
+        <button class="nav-item" data-scroll="history"><svg><use href="#i-clock"/></svg><span>最近运行</span><em id="history-count">0</em></button>
+      </nav>
+      <div class="side-note"><span class="status-dot"></span><div><b>本地模式</b><small>数据留在当前设备</small></div></div>
+      <div class="sidebar-footer">v<span id="app-version">—</span><span>·</span>适用于抗压与抗折</div>
+    </aside>
+
+    <main class="main" id="workspace">
+      <header class="topbar"><div><p class="eyebrow">实验数据工作台</p><h1>整理、检查并运行实验数据</h1></div><div class="local-state" id="connection-state"><span class="status-dot"></span><span id="connection-label">正在连接本地服务</span><button class="icon-button" id="refresh-bootstrap" title="刷新"><svg><use href="#i-refresh"/></svg></button></div></header>
+      <div id="alert" class="alert" role="alert" hidden></div>
+
+      <section class="hero-card panel"><div class="hero-copy"><span class="kicker">开始一次新处理</span><h2>从文件夹到可复核的结果</h2><p>选择数据目录和实验配置，先检查文件，再开始处理。每次运行都会留下可回看的日志与结果。</p></div><div class="hero-actions"><button class="button secondary" id="load-example"><svg><use href="#i-play"/></svg>体验合成示例</button><button class="button primary" id="start-run"><svg><use href="#i-play"/></svg>开始处理</button></div></section>
+
+      <section class="panel workflow-panel">
+        <div class="section-heading"><div><span class="section-index">01</span><h2>选择输入与方法</h2></div><span class="section-hint">必填项</span></div>
+        <div class="form-grid three">
+          <label class="field wide"><span>输入文件夹</span><div class="input-action"><input id="input-dir" type="text" placeholder="例如：E:\\data\\compression" spellcheck="false"><button class="browse-button" data-browse="directory" data-target="input-dir"><svg><use href="#i-folder"/></svg>浏览</button></div><small>支持手动输入绝对路径</small></label>
+          <label class="field wide"><span>输出目录</span><div class="input-action"><input id="output-base" type="text" placeholder="例如：E:\\results\\run-001" spellcheck="false"><button class="browse-button" data-browse="directory" data-target="output-base"><svg><use href="#i-folder"/></svg>浏览</button></div><small>建议每次运行使用新的目录</small></label>
+          <label class="field"><span>实验方法</span><select id="kind"><option value="compression">抗压</option><option value="flexural">抗折</option></select></label>
+          <label class="field"><span>模量下限（峰值比例）</span><div class="unit-input"><input id="lower-fraction" type="number" min="0.01" max="99" step="1"><i>%</i></div></label>
+          <label class="field"><span>模量上限（峰值比例）</span><div class="unit-input"><input id="upper-fraction" type="number" min="0.01" max="99" step="1"><i>%</i></div></label>
+          <label class="field"><span>力阈值</span><div class="unit-input"><input id="force-threshold" type="number" min="0" step="0.01" value="0.25"><i>kN</i></div><small>用于零点对齐的力阈值</small></label>
+        </div>
+        <div class="geometry-card" id="geometry-card"><div class="subheading"><svg><use href="#i-sliders"/></svg><div><b>抗折几何</b><small>矩形截面三点弯曲</small></div></div><div class="form-grid three"><label class="field"><span>支座跨度</span><div class="unit-input"><input id="span-mm" type="number" min="0" step="0.1"><i>mm</i></div></label><label class="field"><span>宽度</span><div class="unit-input"><input id="width-mm" type="number" min="0" step="0.1"><i>mm</i></div></label><label class="field"><span>高度</span><div class="unit-input"><input id="depth-mm" type="number" min="0" step="0.1"><i>mm</i></div></label></div></div>
+      </section>
+
+      <section class="panel config-panel">
+        <div class="section-heading"><div><span class="section-index">02</span><h2>实验配置</h2></div><div class="heading-actions"><button class="button small secondary" id="load-config"><svg><use href="#i-file"/></svg>加载本地 YAML</button><button class="button small secondary" id="save-preset"><svg><use href="#i-save"/></svg>保存为预设</button></div></div>
+        <div class="preset-row"><label class="field"><span>选择预设</span><select id="preset-select"><option value="">当前配置（未保存）</option></select></label><label class="field project-field"><span>项目名称</span><input id="project-name" type="text" placeholder="未命名实验"></label><div class="config-status" id="config-status">配置待检查</div></div>
+        <details class="advanced" open><summary><span>条件分组与标签</span><svg><use href="#i-chevron"/></svg></summary><div class="mapping-toolbar"><p>文件名中的条件会映射到分组与配方。字段会保留在原配置中。</p><button class="button small secondary" id="add-mapping">＋ 添加映射</button></div><div class="mapping-scroll"><table class="mapping-table"><thead><tr><th>条件标识</th><th>中文标签</th><th>英文标签</th><th>分组 ID</th><th>mix ID</th><th></th></tr></thead><tbody id="mapping-body"></tbody></table></div></details>
+        <details class="advanced"><summary><span>高级方法参数</span><svg><use href="#i-chevron"/></svg></summary><div class="advanced-note">当前方法的计算参数与几何尺寸可在上方编辑；未显示的配置字段会随原配置一起保存。</div></details>
+      </section>
+
+      <section class="panel inspect-panel"><div class="section-heading"><div><span class="section-index">03</span><h2>输入检查</h2></div><button class="button small secondary" id="inspect"><svg><use href="#i-refresh"/></svg>检查文件</button></div><div id="inspect-empty" class="empty-state"><svg><use href="#i-folder"/></svg><p>选择输入文件夹后检查可识别文件</p><small>检查结果会显示文件名、条件、龄期与试件信息</small></div><div id="inspect-result" hidden><div class="stat-strip" id="inspect-stats"></div><div class="inspect-scroll"><table class="data-table"><thead><tr><th>文件名</th><th>条件</th><th>龄期</th><th>试件</th><th>状态</th></tr></thead><tbody id="inspect-body"></tbody></table></div></div></section>
+
+      <section class="panel run-panel"><div class="section-heading"><div><span class="section-index">04</span><h2>运行与结果</h2></div><span class="run-badge idle" id="run-status">尚未运行</span></div><div class="run-layout"><div class="run-summary"><div class="run-summary-icon"><svg><use href="#i-chart"/></svg></div><div><b id="run-title">准备开始一次处理</b><p id="run-message">处理完成后，汇总表与曲线预览会出现在这里。</p></div></div><div class="run-actions"><button class="button secondary" id="cancel-run" hidden><svg><use href="#i-x"/></svg>停止运行</button><button class="button secondary" id="open-output" disabled><svg><use href="#i-external"/></svg>打开结果目录</button></div></div><details class="logs"><summary><span>运行日志</span><span id="log-count">0 行</span></summary><pre id="log-output">等待运行...</pre></details><div id="results" hidden><div class="result-heading"><div><span class="kicker">处理结果</span><h3>汇总表</h3></div><div class="result-stats" id="result-stats"></div></div><div class="result-grid"><div class="result-table-wrap"><div class="table-caption">主要结果 <span>显示关键字段，完整字段可展开</span></div><div class="table-scroll"><table class="data-table result-table"><thead id="result-head"></thead><tbody id="result-body"></tbody></table></div><details class="technical-fields" id="technical-fields"><summary>查看完整技术字段</summary><div class="table-scroll"><table class="data-table result-table"><thead id="technical-head"></thead><tbody id="technical-body"></tbody></table></div></details></div><div class="figures"><div class="table-caption">曲线与图表 <span>点击图片放大</span></div><div class="figure-grid" id="figure-grid"></div><div class="result-files"><div class="table-caption">结果文件</div><div id="table-links"></div></div></div></div></div></section>
+
+      <section class="panel history-panel" id="history"><div class="section-heading"><div><span class="section-index">05</span><h2>最近运行</h2></div><span class="section-hint">本地记录</span></div><div id="history-list" class="history-list"><div class="empty-state compact"><svg><use href="#i-clock"/></svg><p>还没有运行记录</p></div></div></section>
+      <footer class="footer">clean_number · 实验数据工作台</footer>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="browse-modal" hidden><div class="modal" role="dialog" aria-modal="true" aria-labelledby="browse-title"><div class="modal-head"><div><span class="kicker">本地文件</span><h2 id="browse-title">选择路径</h2></div><button class="icon-button" data-close-modal title="关闭"><svg><use href="#i-x"/></svg></button></div><div class="path-bar"><input id="browse-path" type="text" placeholder="输入绝对路径"><button class="button small primary" id="browse-go">前往</button></div><div class="breadcrumbs" id="browse-location">根目录</div><div class="browser-list" id="browser-list"></div><div class="modal-foot"><span id="browse-selection">请选择一个目录</span><button class="button primary" id="browse-select">选择此路径</button></div></div></div>
+  <div class="modal-backdrop" id="preset-modal" hidden><div class="modal small-modal" role="dialog" aria-modal="true" aria-labelledby="preset-title"><div class="modal-head"><div><span class="kicker">保存当前配置</span><h2 id="preset-title">新建预设</h2></div><button class="icon-button" data-close-modal title="关闭"><svg><use href="#i-x"/></svg></button></div><label class="field"><span>预设名称</span><input id="preset-name" type="text" placeholder="例如：28天抗压标准配置"></label><div class="modal-foot"><span></span><button class="button primary" id="confirm-preset">保存预设</button></div></div></div>
+  <script src="app.js"></script>
+</body>
+</html>

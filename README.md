@@ -3,12 +3,12 @@
 Turn supported testing-machine exports into peak-stress summaries, diagnostic
 moduli, plots and traceable processing records.
 
-**Release candidate:** `v0.2.0-rc.1` · **License:** [MIT](LICENSE)
+**Release candidate:** `v0.2.0-rc.2` · **License:** [MIT](LICENSE)
 
 **Verified environment:** Windows, Python 3.14.2
 
-`clean_number` is a Python command-line tool for researchers processing
-compression and rectangular three-point-bending data. It keeps the source
+`clean_number` provides a command line and a local browser workbench for researchers
+processing compression and rectangular three-point-bending data. It keeps the source
 files unchanged and records the inputs, configuration and outputs for each run.
 
 ## What it supports
@@ -23,6 +23,7 @@ files unchanged and records the inputs, configuration and outputs for each run.
 - Per-file results, independent-specimen grouping, statistics tables and plots.
 - Duplicate-content markers and recorded, file-specific processing overrides.
 - A processing manifest that binds inputs, configuration and outputs with hashes.
+- A Chinese local workbench with configuration presets, run history and result browsing.
 
 The calculations do not establish standards compliance or material validity.
 Supported column labels, units and geometry are deliberately limited; see the
@@ -38,6 +39,18 @@ and a diagnostic modulus of 11.72 GPa. The synthetic values exercise the
 calculation; they are not a material-property claim.
 
 ## Quick start
+
+### Local workbench
+
+First create `.venv` and install `requirements.txt` using the commands below.
+On Windows, double-click **Start-CleanNumber.vbs** to open the local browser
+interface. Choose a data folder, edit common parameters and condition labels,
+save presets, and review results and plots without typing CLI commands.
+The launcher checks an explicitly selected interpreter, the checkout's `.venv`,
+then system Python for the core dependencies; it does not install packages.
+See [the workbench guide](docs/LOCAL_UI.md) for setup and stopping the service.
+
+### Command line
 
 From a local checkout, create an environment and install the core dependencies.
 The following commands use Windows PowerShell and do not require activation:
@@ -73,6 +86,11 @@ Run the synthetic three-point-bending example:
 only need tables and processing records. Choose a new output directory for
 each run; a non-empty directory is rejected unless you explicitly pass
 `--overwrite`.
+
+Input discovery reads direct-child `.xls` and `.xlsx` files, with
+case-insensitive extensions. Directories with those suffixes are ignored.
+If there are no supported files, the command exits with a clear message before
+creating output files, including when `--overwrite` is supplied.
 
 The bundled fixtures are GBK-encoded tab-separated text with an `.xls` suffix,
 one metadata row and then the column headers. They are generated from simple
@@ -149,11 +167,16 @@ Run the self-contained synthetic test suite:
 & .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-The 12 tests cover numerical checks, geometry changes, invalid columns/units,
+The core tests cover numerical checks, geometry changes, invalid columns/units,
 input preservation, grouping, output containment and unavailable flexural
-modulus handling. Installation and both example commands were verified on
-Windows with Python 3.14.2. Dependency lower bounds are not a tested platform
-or Python-version matrix. See [TESTING.md](TESTING.md) for the verification scope.
+modulus handling. Input-discovery tests also cover empty folders, suffix-matching
+directories, preservation of earlier output and end-to-end manifest contents.
+The workbench tests cover configuration
+preservation, isolated CLI runs, cancellation, failed inputs, and loopback HTTP
+access. The release-candidate checks use Windows with an existing Python 3.14.2
+environment. The rc.1 installation check is historical; rc.2 does not claim a
+fresh dependency installation or a tested platform/Python-version matrix.
+See [TESTING.md](TESTING.md) for the verification scope.
 
 The tool runs independently. Its processing manifests can also be inspected
 and registered by the separate mining-research-kernel adapter. That adapter

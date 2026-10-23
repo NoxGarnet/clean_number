@@ -236,15 +236,23 @@ def make_specimen_info(directory: str, filename: str, profile=None) -> Optional[
     )
 
 
+def list_data_files(directory: str, extensions=(".xls", ".xlsx")) -> list[str]:
+    """List supported direct-child files, excluding suffix-matching directories."""
+    return [
+        os.path.join(directory, name)
+        for name in sorted(os.listdir(directory))
+        if name.lower().endswith(extensions)
+        and os.path.isfile(os.path.join(directory, name))
+    ]
+
+
 def scan_directory(directory: str, extensions=(".xls", ".xlsx"), profile=None) -> dict:
     """扫描目录下的所有数据文件，按分组整理。
     Returns: {group_key: [SpecimenInfo, ...]}
     """
     files = []
-    for f in sorted(os.listdir(directory)):
-        if not f.lower().endswith(extensions):
-            continue
-        info = make_specimen_info(directory, f, profile=profile)
+    for filepath in list_data_files(directory, extensions):
+        info = make_specimen_info(directory, os.path.basename(filepath), profile=profile)
         if info:
             files.append(info)
 
