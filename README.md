@@ -178,6 +178,11 @@ environment. The rc.1 installation check is historical; rc.2 does not claim a
 fresh dependency installation or a tested platform/Python-version matrix.
 See [TESTING.md](TESTING.md) for the verification scope.
 
+[GitHub Actions](.github/workflows/ci.yml) also checks Windows Python 3.14 on
+pushes and pull requests: core dependency installation, syntax checks, the
+complete synthetic suite and both CLI examples. Exact environment versions
+are recorded in each run; this is separate from the historical local acceptance.
+
 The tool runs independently. Its processing manifests can also be inspected
 and registered by the separate mining-research-kernel adapter. That adapter
 has historical integration evidence; the core examples and tests do not

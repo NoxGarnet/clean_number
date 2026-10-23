@@ -20,6 +20,26 @@ environment with the core dependencies. It checks the extracted archive rather
 than relying on untracked files in a developer checkout. This is not a fresh
 dependency installation or a compatibility guarantee for all Python versions.
 
+## Continuous integration
+
+The [GitHub Actions workflow](.github/workflows/ci.yml) runs on pushes, pull
+requests and manual dispatch. Its Windows job selects Python 3.14, installs
+the core `requirements.txt` in the runner environment, checks dependency
+consistency, and records the installed versions in the job log.
+
+The job checks Python, JavaScript and PowerShell syntax, runs the complete
+synthetic unittest suite including its loopback HTTP test, then runs both
+documented CLI examples with plots enabled. JavaScript syntax uses Node.js 24;
+Python subprocesses use UTF-8 and Matplotlib uses the headless Agg backend.
+
+The workflow has read-only repository permissions, uses Actions pinned to
+commit SHAs, and cancels superseded runs for the same event/ref. It does not
+install optional report dependencies. Browser rendering and Windows launcher
+lifecycle acceptance remain separate from syntax and API tests.
+
+A successful run validates the selected runner, interpreter and dependency
+versions in that run; it is not a cross-platform or lower-bound version matrix.
+
 ## Checks
 
 ```powershell
