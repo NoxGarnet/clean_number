@@ -23,7 +23,6 @@ jobs:
     env:
       PYTHONUTF8: '1'
       MPLBACKEND: Agg
-      MPLCONFIGDIR: ${{ runner.temp }}/clean-number-matplotlib
 
     steps:
       - name: Check out repository
