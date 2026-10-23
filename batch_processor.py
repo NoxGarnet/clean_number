@@ -22,7 +22,7 @@ import pandas as pd
 from process_single import process_single_file
 from parse_rtf import detect_test_type
 from experiment_type import detect as detect_experiment_type
-from filename_parser import make_specimen_info
+from filename_parser import list_data_files, make_specimen_info
 from profile_loader import try_load
 from processing_overrides import get_file_override
 
@@ -129,14 +129,10 @@ def batch_process(
     pd.DataFrame
         汇总表。
     """
+    all_files = list_data_files(data_dir)
+    if not all_files:
+        raise ValueError(f"No .xls/.xlsx data files found in input directory: {data_dir}")
     profile = profile or try_load(data_dir)
-    
-    # 扫描 .xls 文件
-    all_files = sorted([
-        os.path.join(data_dir, f)
-        for f in os.listdir(data_dir)
-        if f.lower().endswith(('.xls', '.xlsx'))
-    ])
     duplicate_metadata = detect_duplicate_content(all_files)
     
     log.info("数据目录: %s  |  文件数: %d", os.path.basename(os.path.normpath(data_dir)), len(all_files))
@@ -240,6 +236,7 @@ def batch_process(
             "exclusion_reason": exclusion_reason,
             "quality_flags": "|".join(quality_flags),
             "status": res.get("status", "error"),
+            "error_msg": res.get("error_msg", ""),
         }
         if info:
             for factor_name, factor_value in info.factors.items():

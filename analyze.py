@@ -65,6 +65,9 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if not os.path.isdir(args.dir):
         raise SystemExit(f"Input directory does not exist: {args.dir}")
+    from filename_parser import list_data_files
+    if not list_data_files(args.dir):
+        raise SystemExit(f"No .xls/.xlsx data files found in input directory: {args.dir}")
     output_path = os.path.abspath(args.output)
     if os.path.isdir(output_path) and any(os.scandir(output_path)) and not args.overwrite:
         raise SystemExit(
